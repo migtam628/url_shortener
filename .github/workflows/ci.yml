@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: mtlink
+          POSTGRES_PASSWORD: mtlink
+          POSTGRES_DB: mtlink
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U mtlink"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://mtlink:mtlink@127.0.0.1:5432/mtlink
+      REDIS_URL: redis://127.0.0.1:6379
+      SESSION_SECRET: ci-session-secret-not-a-real-one
+      IP_HASH_SECRET: ci-ip-hash-secret
+      SHORT_DOMAINS: mt.lc,go.localhost
+      TRUST_PROXY_HOPS: '0'
+      API_PORT: '4000'
+      REDIRECT_PORT: '4001'
+      LOG_LEVEL: warn
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        run: npm -w @mtlink/api run generate
+
+      - name: Apply migrations
+        run: |
+          for f in services/api/prisma/migrations/*/migration.sql; do
+            echo "applying $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Build
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit and integration tests
+        run: |
+          npx vitest run --root packages/shared
+          npx vitest run --root services/api
+
+      - name: Start services for end-to-end tests
+        run: |
+          node services/redirect/dist/index.js & echo $! > /tmp/redirect.pid
+          node services/api/dist/index.js      & echo $! > /tmp/api.pid
+          # Wait for readiness rather than sleeping a fixed amount.
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:4001/health >/dev/null \
+               && curl -sf http://127.0.0.1:4000/health >/dev/null; then
+              echo "services up after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "services failed to start"; exit 1
+
+      - name: Redirect end-to-end tests
+        run: npx vitest run --root services/redirect
+
+      - name: Verify acceptance criteria
+        run: bash scripts/verify-acceptance.sh
+
+      - name: Stop services
+        if: always()
+        run: |
+          kill "$(cat /tmp/api.pid)" "$(cat /tmp/redirect.pid)" 2>/dev/null || true
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # Build both production images. This is the check that the Dockerfiles
+      # actually work, which `docker compose up` in dev never exercises.
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/api/Dockerfile
+          target: prod
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build redirect image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/redirect/Dockerfile
+          target: prod
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Validate compose files
+        run: |
+          cp .env.example .env
+          docker compose config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config >/dev/null
+          echo "compose files valid"
