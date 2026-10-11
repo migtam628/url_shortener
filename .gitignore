@@ -22,3 +22,7 @@ backups/
 playwright-report/
 test-results/
 bench/*.json
+
+# Playwright
+apps/dashboard/playwright-report/
+apps/dashboard/test-results/
