@@ -79,7 +79,12 @@ The script generates real secrets, issues certificates, configures the
 firewall, builds and starts the stack, runs migrations, and installs
 systemd timers for verified nightly backups and weekly GeoIP refresh. It is
 idempotent; re-running it updates the checkout without touching your
-`.env`. Details in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+`.env`.
+
+**First time deploying? Follow [docs/VPS-SETUP.md](docs/VPS-SETUP.md)** —
+it covers domain choice, DNS, the port-conflict branch if the box already
+runs a reverse proxy, locking down registration, and getting backups
+off-box.
 
 ### Locally
 
@@ -305,6 +310,7 @@ Honest list, so nothing here is a surprise later:
 
 | | |
 |---|---|
+| [docs/VPS-SETUP.md](docs/VPS-SETUP.md) | Step-by-step first deployment, start here |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it works, why, and where the unbuilt parts attach |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | VPS setup, Cloudflare, backups, monitoring, scaling |
 | [docs/API.md](docs/API.md) | REST reference |
