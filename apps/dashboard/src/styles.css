@@ -1,0 +1,171 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   MT Link — design tokens
+
+   The visual model is a technical equipment register, not a SaaS dashboard.
+   A short link is a label on something physical: a QR on a printed work
+   order, a sticker on a rack. So the interface reads as a schedule of
+   labelled ports — dense rows, a monospace address column, and one signal
+   colour reserved for "this is live and where it points".
+
+   Monospace is functional, not decorative: slugs get read aloud down a phone
+   line to a tech on a roof, so 0/O and 1/l have to be distinguishable.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-paper: #f6f6f3;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfbf9;
+  --color-ink: #14161a;
+  --color-ink-2: #5a6069;
+  --color-ink-3: #8c939c;
+  --color-rule: #e2e2db;
+  --color-rule-strong: #cfcfc6;
+
+  /* One saturated accent, used only for live/active state and primary action. */
+  --color-signal: #1f5fd6;
+  --color-signal-ink: #ffffff;
+  --color-signal-soft: #e9f0fd;
+
+  --color-ok: #15803d;
+  --color-warn: #b45309;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdeceb;
+
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+}
+
+:root[data-theme='dark'] {
+  --color-paper: #0e1013;
+  --color-surface: #16191e;
+  --color-surface-2: #1b1f25;
+  --color-ink: #eceef1;
+  --color-ink-2: #9ba3ad;
+  --color-ink-3: #6b737d;
+  --color-rule: #262b33;
+  --color-rule-strong: #343b45;
+
+  --color-signal: #5b8ff0;
+  --color-signal-ink: #0e1013;
+  --color-signal-soft: #18263f;
+
+  --color-ok: #4ade80;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+  --color-danger-soft: #2a1718;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--color-rule);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tabular figures everywhere numbers are compared down a column. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--color-signal);
+    color: var(--color-signal-ink);
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Honour the OS setting rather than animating regardless. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Register row: the core unit of the links view. */
+  .register-row {
+    display: grid;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--color-rule);
+    background: var(--color-surface);
+    text-align: left;
+    width: 100%;
+    transition: background 120ms ease;
+  }
+  .register-row:hover {
+    background: var(--color-surface-2);
+  }
+
+  .port {
+    width: 7px;
+    height: 7px;
+    border-radius: 1px;
+    flex: none;
+  }
+}
+
+/* Drawer motion: answers a user action, so it earns its animation. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-drawer {
+  animation: drawer-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.animate-overlay {
+  animation: overlay-in 140ms ease;
+}
