@@ -18,6 +18,8 @@ EXPOSE 5173
 CMD ["npm", "-w", "@mtlink/dashboard", "run", "dev", "--", "--host", "0.0.0.0"]
 
 FROM deps AS build
+ARG VITE_BASE_PATH=/
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 COPY . .
 RUN npm -w @mtlink/shared run build && npm -w @mtlink/dashboard run build
 
