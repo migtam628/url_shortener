@@ -1,0 +1,103 @@
+# Production overrides. Use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Differences from dev: built (not mounted) images, no host port exposure for
+# internal services, restart policies, resource limits, and multiple redirect
+# replicas behind NGINX.
+
+name: mtlink
+
+services:
+  postgres:
+    ports: []
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - random_page_cost=1.1
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2G }
+
+  redis:
+    ports: []
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - allkeys-lru
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 768M }
+
+  api:
+    build:
+      target: prod
+    command: ["node", "services/api/dist/index.js"]
+    volumes:
+      - geoip:/geoip
+    ports: []
+    environment:
+      NODE_ENV: production
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 768M }
+
+  worker:
+    build:
+      target: prod
+    command: ["node", "services/api/dist/worker.js"]
+    volumes:
+      - geoip:/geoip
+    environment:
+      NODE_ENV: production
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 768M }
+
+  redirect:
+    build:
+      target: prod
+    command: ["node", "services/redirect/dist/index.js"]
+    volumes: []
+    ports: []
+    environment:
+      NODE_ENV: production
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: "1.0", memory: 384M }
+
+  dashboard:
+    build:
+      target: prod
+    command: ["sh", "-c", "echo 'dashboard is served as static files by nginx' && sleep infinity"]
+    volumes:
+      - dashboard_dist:/app/apps/dashboard/dist
+    ports: []
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - acme_challenge:/var/www/acme
+      - dashboard_dist:/var/www/dashboard:ro
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 256M }
+
+volumes:
+  dashboard_dist:
