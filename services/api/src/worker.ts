@@ -12,7 +12,7 @@ import { initGeoip, lookupGeo } from './lib/geoip.js';
 import { clicksProcessed, clickQueueDepth, workerBatchSize } from './metrics.js';
 import { closeQueue, queueDepth } from './queue.js';
 import { runRollup } from './jobs/rollup.js';
-import { ensurePartitions } from './jobs/partitions.js';
+import { drainDefaultPartition, ensurePartitions } from './jobs/partitions.js';
 import { pruneExpiredSessions } from './auth/session.js';
 
 /**
@@ -168,6 +168,9 @@ async function main(): Promise<void> {
       try {
         clickQueueDepth.set(await queueDepth());
         await ensurePartitions();
+        // Rescues rows written across a month boundary before the
+        // partition for that month existed. Normally a no-op.
+        await drainDefaultPartition();
         const pruned = await pruneExpiredSessions();
         if (pruned > 0) logger.info({ pruned }, 'expired sessions pruned');
       } catch (err) {

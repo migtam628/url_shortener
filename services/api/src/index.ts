@@ -10,7 +10,7 @@ async function main(): Promise<void> {
   // idempotent, and it means a fresh deployment is never one month away from
   // writing everything into click_default.
   try {
-    await prisma.$queryRaw`SELECT mtlink_ensure_click_partitions(12)`;
+    await prisma.$queryRaw`SELECT mtlink_ensure_click_partitions(12, 2)`;
     logger.info('click partitions ensured');
   } catch (err) {
     logger.error({ err }, 'could not ensure click partitions — run migrations?');

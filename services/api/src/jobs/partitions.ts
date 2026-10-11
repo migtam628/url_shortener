@@ -3,24 +3,58 @@ import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 
 const MONTHS_AHEAD = 12;
+const MONTHS_BACK = 2;
 
 /**
- * Keep monthly click partitions provisioned a year ahead.
+ * Keep monthly click partitions provisioned a year ahead AND a couple of
+ * months back.
  *
- * If this ever stops running, writes land in `click_default` rather than
- * failing — correct, but it defeats partition pruning, so the default
- * partition being non-empty is worth alerting on.
+ * Backwards matters more than it looks: a click's timestamp is when the
+ * redirect happened, not when the worker wrote it. A queue backlog that
+ * straddles a month boundary, a replayed dead-letter job, or an imported
+ * history all produce rows dated before the current month. Without a
+ * partition for that month they land in `click_default` — not lost, but
+ * invisible to partition pruning, which is the whole point of partitioning.
+ *
+ * `click_default` being non-empty is therefore the alert worth having.
  */
-export async function ensurePartitions(monthsAhead = MONTHS_AHEAD): Promise<string[]> {
+export async function ensurePartitions(
+  monthsAhead = MONTHS_AHEAD,
+  monthsBack = MONTHS_BACK,
+): Promise<string[]> {
   const rows = await prisma.$queryRaw<Array<{ mtlink_ensure_click_partitions: string }>>(
     // Prisma binds a JS number as bigint; the function takes int, and
     // Postgres will not implicitly narrow, so cast explicitly.
-    Prisma.sql`SELECT mtlink_ensure_click_partitions(${monthsAhead}::int)`,
+    Prisma.sql`SELECT mtlink_ensure_click_partitions(${monthsAhead}::int, ${monthsBack}::int)`,
   );
   const results = rows.map((r) => r.mtlink_ensure_click_partitions);
   const created = results.filter((r) => r.endsWith('(created)'));
   if (created.length) logger.info({ created }, 'click partitions created');
   return results;
+}
+
+/**
+ * Move any rows stranded in `click_default` into their proper partitions,
+ * creating those partitions as needed.
+ *
+ * Safe to call routinely: it is a no-op when the default is empty, and it
+ * runs in a single transaction so a click is never in neither place.
+ */
+export async function drainDefaultPartition(): Promise<{ moved: number; partitions: string[] }> {
+  const rows = await prisma.$queryRaw<Array<{ moved: bigint; partitions: string[] }>>(
+    Prisma.sql`SELECT * FROM mtlink_drain_default_partition()`,
+  );
+  const result = {
+    moved: Number(rows[0]?.moved ?? 0),
+    partitions: rows[0]?.partitions ?? [],
+  };
+  if (result.moved > 0) {
+    logger.warn(
+      result,
+      'rows were stranded in click_default and have been moved — check that the partition job is running',
+    );
+  }
+  return result;
 }
 
 /** Rows that missed every range partition. Should always be zero. */
