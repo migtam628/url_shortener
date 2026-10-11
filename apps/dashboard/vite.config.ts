@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  // Production serves the management UI below the redirect domain's reserved
+  // /manage prefix. Local development remains rooted at / by default.
+  base: process.env['VITE_BASE_PATH'] ?? '/',
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
